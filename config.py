@@ -9,10 +9,11 @@ class Config:
     TELEGRAM_BOT_API = os.getenv("TELEGRAM_BOT_API", "")
     TELEGRAM_WEBHOOK_MODE = os.getenv("TELEGRAM_WEBHOOK_MODE", "false").lower() == "true"
     TELEGRAM_WEBHOOK_URL = os.getenv("TELEGRAM_WEBHOOK_URL", "")
+    PROXY_URL = os.getenv("PROXY_URL", "")
 
     # LLM
     LLM_APIKEY = os.getenv("LLM_APIKEY", "")
-    LLM_ENDPOINT = os.getenv("LLM_ENDPOINT", "https://api.minimax.chat/v1/text/chatcompletion_v2")
+    LLM_ENDPOINT = os.getenv("LLM_ENDPOINT", "https://api.minimax.io/v1/text/chatcompletion_v2")
 
     # Qdrant
     QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")

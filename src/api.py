@@ -1,10 +1,18 @@
 """API layer - low level functions for Telegram, LLM, Qdrant."""
 import logging
+import os
 import requests
 from typing import Optional
 from config import Config
 
 logger = logging.getLogger(__name__)
+
+
+def _get_telegram_proxy_dict() -> Optional[dict]:
+    """Get proxy dict for Telegram requests."""
+    if Config.PROXY_URL:
+        return {"http": Config.PROXY_URL, "https": Config.PROXY_URL}
+    return None
 
 
 # ============ Telegram API ============
@@ -23,8 +31,10 @@ def send_telegram_message(chat_id: int, text: str, parse_mode: str = "Markdown")
         "parse_mode": parse_mode
     }
 
+    proxies = _get_telegram_proxy_dict()
+
     try:
-        response = requests.post(url, json=data, timeout=30)
+        response = requests.post(url, json=data, timeout=30, proxies=proxies)
         response.raise_for_status()
         return True
     except requests.RequestException as e:
@@ -41,8 +51,10 @@ def set_telegram_webhook(url: str) -> bool:
     webhook_url = f"https://api.telegram.org/bot{Config.TELEGRAM_BOT_API}/setWebhook"
     data = {"url": url}
 
+    proxies = _get_telegram_proxy_dict()
+
     try:
-        response = requests.post(webhook_url, json=data, timeout=30)
+        response = requests.post(webhook_url, json=data, timeout=30, proxies=proxies)
         response.raise_for_status()
         return True
     except requests.RequestException as e:
@@ -57,8 +69,10 @@ def delete_telegram_webhook() -> bool:
 
     url = f"https://api.telegram.org/bot{Config.TELEGRAM_BOT_API}/deleteWebhook"
 
+    proxies = _get_telegram_proxy_dict()
+
     try:
-        response = requests.post(url, timeout=30)
+        response = requests.post(url, timeout=30, proxies=proxies)
         response.raise_for_status()
         return True
     except requests.RequestException as e:

@@ -266,11 +266,11 @@ class TestEmbeddingAPI:
         result = get_embeddings([])
         assert result == []
 
-    def test_get_embeddings_no_sentence_transformers(self):
-        """Test embedding when sentence-transformers not available."""
+    def test_get_embeddings_with_text(self):
+        """Test embedding with actual text returns a list."""
         from src.api import get_embeddings
 
-        # Test that the function handles import error gracefully
         result = get_embeddings(["test text"])
-        # Should return empty list when sentence-transformers not installed
-        assert result == []
+        # Should return a list of embeddings
+        assert isinstance(result, list)
+        assert len(result) == 1

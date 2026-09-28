@@ -22,8 +22,9 @@ services:
       - TELEGRAM_BOT_API=${TELEGRAM_BOT_API}
       - TELEGRAM_WEBHOOK_MODE=${TELEGRAM_WEBHOOK_MODE:-false}
       - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL}
+      - PROXY_URL=${PROXY_URL}
       - LLM_APIKEY=${LLM_APIKEY}
-      - LLM_ENDPOINT=${LLM_ENDPOINT:-https://api.minimax.chat/v1/text/chatcompletion_v2}
+      - LLM_ENDPOINT=${LLM_ENDPOINT:-https://api.minimax.io/v1/text/chatcompletion_v2}
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - QDRANT_GRPC_PORT=6334
