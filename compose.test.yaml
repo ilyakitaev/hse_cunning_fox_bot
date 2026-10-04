@@ -1,0 +1,66 @@
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - TELEGRAM_BOT_API=${TELEGRAM_BOT_API}
+      - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL}
+      - PROXY_URL=${PROXY_URL}
+      - HTTP_PROXY=${PROXY_URL}
+      - HTTPS_PROXY=${PROXY_URL}
+      - http_proxy=${PROXY_URL}
+      - https_proxy=${PROXY_URL}
+      - NO_PROXY=localhost,127.0.0.1,qdrant,postgres
+      - no_proxy=localhost,127.0.0.1,qdrant,postgres
+      - LLM_APIKEY=${LLM_APIKEY}
+      - LLM_ENDPOINT=${LLM_ENDPOINT:-https://api.minimax.io/v1/text/chatcompletion_v2}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_GRPC_PORT=6334
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-hse_bot}
+      - POSTGRES_USER=${POSTGRES_USER:-hse_bot}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secret_password}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-secret_password}
+      - USE_WEBHOOK=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-hse_bot}
+      - POSTGRES_USER=${POSTGRES_USER:-hse_bot}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secret_password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hse_bot} -d ${POSTGRES_DB:-hse_bot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333; echo $?'"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  qdrant_storage:
+    driver: local
+  postgres_data:
+    driver: local

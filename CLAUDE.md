@@ -2,7 +2,8 @@
 - run test after every source files modification and fix bugs if they are
 - use pipenv for virtual environment with local PIPENV_VENV_IN_PROJECT directory setup
 - every business logic and api function should be covered with unit test with mocks
-- do not open ports in compose.yaml 
+- do not open ports in compose.yaml, if they are opened -- remove "ports"
+- before update tests code, update tests.md then implement
 
 ## Core Development Rules
 

@@ -1,39 +1,86 @@
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: hse_postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-hse_bot}
+      - POSTGRES_USER=${POSTGRES_USER:-hse_bot}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secret_password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hse_bot} -d ${POSTGRES_DB:-hse_bot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   qdrant:
     image: qdrant/qdrant:v1.7.4
     container_name: hse_qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
     volumes:
       - qdrant_storage:/qdrant/storage
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333; echo $?'"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   bot:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: hse_bot
-    ports:
-      - "5000:5000"
+    image: hse_cunning_fox_bot:latest
     environment:
       - TELEGRAM_BOT_API=${TELEGRAM_BOT_API}
-      - TELEGRAM_WEBHOOK_MODE=${TELEGRAM_WEBHOOK_MODE:-false}
       - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL}
       - PROXY_URL=${PROXY_URL}
+      - HTTP_PROXY=${PROXY_URL}
+      - HTTPS_PROXY=${PROXY_URL}
+      - http_proxy=${PROXY_URL}
+      - https_proxy=${PROXY_URL}
+      - NO_PROXY=localhost,127.0.0.1,qdrant,postgres
+      - no_proxy=localhost,127.0.0.1,qdrant,postgres
       - LLM_APIKEY=${LLM_APIKEY}
       - LLM_ENDPOINT=${LLM_ENDPOINT:-https://api.minimax.io/v1/text/chatcompletion_v2}
+      - LLM_MODEL=${LLM_MODEL:-MiniMax-Text-01}
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - QDRANT_GRPC_PORT=6334
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-hse_bot}
+      - POSTGRES_USER=${POSTGRES_USER:-hse_bot}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secret_password}
       - AUTH_PASSWORD=${AUTH_PASSWORD:-secret_password}
-      - USE_WEBHOOK=${USE_WEBHOOK:-false}
+      - USE_WEBHOOK=false
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     depends_on:
-      - qdrant
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
 volumes:
   qdrant_storage:
+    driver: local
+  postgres_data:
+    driver: local
+  hf_cache:
     driver: local

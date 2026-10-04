@@ -274,3 +274,120 @@ class TestEmbeddingAPI:
         # Should return a list of embeddings
         assert isinstance(result, list)
         assert len(result) == 1
+
+
+class TestQdrantPointsAPI:
+    """Tests for Qdrant point operations."""
+
+    @patch("src.api.get_qdrant_client")
+    def test_list_points_success(self, mock_get_client):
+        """Test successful listing of points."""
+        from src.api import list_points
+
+        mock_client = Mock()
+        mock_point = Mock()
+        mock_point.id = "uuid-1"
+        mock_point.payload = {"filename": "file1.txt", "text": "Content 1"}
+
+        mock_client.scroll.return_value = ([mock_point], None, None)
+        mock_get_client.return_value = mock_client
+
+        result = list_points("test_collection")
+        assert len(result) == 1
+        assert result[0]["id"] == "uuid-1"
+        assert result[0]["filename"] == "file1.txt"
+
+    @patch("src.api.get_qdrant_client")
+    def test_list_points_failure(self, mock_get_client):
+        """Test failed listing of points."""
+        from src.api import list_points
+
+        mock_client = Mock()
+        mock_client.scroll.side_effect = Exception("Error")
+        mock_get_client.return_value = mock_client
+
+        result = list_points("test_collection")
+        assert result == []
+
+    @patch("src.api.get_qdrant_client")
+    def test_get_point_success(self, mock_get_client):
+        """Test successful getting a point."""
+        from src.api import get_point
+
+        mock_client = Mock()
+        mock_point = Mock()
+        mock_point.id = "uuid-1"
+        mock_point.payload = {"filename": "file1.txt", "text": "Content 1"}
+
+        mock_client.retrieve.return_value = [mock_point]
+        mock_get_client.return_value = mock_client
+
+        result = get_point("test_collection", "uuid-1")
+        assert result is not None
+        assert result["id"] == "uuid-1"
+        assert result["filename"] == "file1.txt"
+
+    @patch("src.api.get_qdrant_client")
+    def test_get_point_not_found(self, mock_get_client):
+        """Test getting non-existent point."""
+        from src.api import get_point
+
+        mock_client = Mock()
+        mock_client.retrieve.return_value = []
+        mock_get_client.return_value = mock_client
+
+        result = get_point("test_collection", "nonexistent")
+        assert result is None
+
+    @patch("src.api.get_qdrant_client")
+    def test_delete_point_success(self, mock_get_client):
+        """Test successful point deletion."""
+        from src.api import delete_point
+
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+
+        result = delete_point("test_collection", "uuid-1")
+        assert result is True
+        mock_client.delete.assert_called_once()
+
+    @patch("src.api.get_qdrant_client")
+    def test_delete_point_failure(self, mock_get_client):
+        """Test failed point deletion."""
+        from src.api import delete_point
+
+        mock_client = Mock()
+        mock_client.delete.side_effect = Exception("Error")
+        mock_get_client.return_value = mock_client
+
+        result = delete_point("test_collection", "uuid-1")
+        assert result is False
+
+    @patch("src.api.get_qdrant_client")
+    def test_delete_all_points_success(self, mock_get_client):
+        """Test successful deletion of all points."""
+        from src.api import delete_all_points
+
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+
+        # Mock scroll to return a tuple (points, next_page_token, None)
+        mock_point = Mock()
+        mock_point.id = "uuid-1"
+        mock_client.scroll.return_value = ([mock_point], None, None)
+
+        result = delete_all_points("test_collection")
+        assert result is True
+        mock_client.delete.assert_called_once()
+
+    @patch("src.api.get_qdrant_client")
+    def test_delete_all_points_failure(self, mock_get_client):
+        """Test failed deletion of all points."""
+        from src.api import delete_all_points
+
+        mock_client = Mock()
+        mock_client.delete.side_effect = Exception("Error")
+        mock_get_client.return_value = mock_client
+
+        result = delete_all_points("test_collection")
+        assert result is False

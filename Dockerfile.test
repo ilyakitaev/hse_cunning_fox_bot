@@ -2,11 +2,14 @@ FROM hse_cunning_fox_bot_base:latest
 
 WORKDIR /app
 
-# Copy application requirements
+# Copy requirements
 COPY requirements.txt .
 
 # Install application dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install test dependencies
+RUN pip install --no-cache-dir pytest pytest-asyncio
 
 # Copy application code
 COPY . .
@@ -14,5 +17,5 @@ COPY . .
 # Set Python path
 ENV PYTHONPATH=/app
 
-# Run the bot
-CMD ["python", "-m", "src.main"]
+# Run integration tests
+CMD ["pytest", "tests/test_integration.py", "-v"]

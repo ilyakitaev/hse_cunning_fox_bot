@@ -5,6 +5,12 @@ import requests
 from typing import Optional
 from config import Config
 
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.INFO),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,7 +24,7 @@ def _get_telegram_proxy_dict() -> Optional[dict]:
 # ============ Telegram API ============
 
 
-def send_telegram_message(chat_id: int, text: str, parse_mode: str = "Markdown") -> bool:
+def send_telegram_message(chat_id: int, text: str, parse_mode: str = None) -> bool:
     """Send a message to a Telegram chat."""
     if not Config.TELEGRAM_BOT_API:
         logger.error("TELEGRAM_BOT_API not configured")
@@ -28,8 +34,9 @@ def send_telegram_message(chat_id: int, text: str, parse_mode: str = "Markdown")
     data = {
         "chat_id": chat_id,
         "text": text,
-        "parse_mode": parse_mode
     }
+    if parse_mode:
+        data["parse_mode"] = parse_mode
 
     proxies = _get_telegram_proxy_dict()
 
@@ -86,12 +93,16 @@ def delete_telegram_webhook() -> bool:
 def call_llm(
     system_prompt: str,
     user_prompt: str,
-    model: str = "abab6.5s-chat"
+    model: str = None
 ) -> Optional[str]:
     """Call LLM API with system and user prompts."""
     if not Config.LLM_APIKEY:
         logger.error("LLM_APIKEY not configured")
         return None
+
+    # Use config model if not specified
+    if model is None:
+        model = Config.LLM_MODEL
 
     url = Config.LLM_ENDPOINT
     headers = {
@@ -114,9 +125,39 @@ def call_llm(
         response = requests.post(url, json=data, headers=headers, timeout=120)
         response.raise_for_status()
         result = response.json()
-        return result.get("choices", [{}])[0].get("message", {}).get("content")
+        # Debug: log the full response
+        logger.debug(f"LLM response: {result}")
+
+        # Handle different response formats
+        if not result:
+            logger.error("Empty response from LLM")
+            return None
+
+        choices = result.get("choices")
+        if not choices:
+            logger.error(f"No choices in LLM response: {result}")
+            return None
+
+        first_choice = choices[0] if choices else {}
+        if not first_choice:
+            logger.error(f"Empty choice in LLM response: {result}")
+            return None
+
+        message = first_choice.get("message")
+        if not message:
+            # Try alternative format
+            message = first_choice.get("text")
+
+        if not message:
+            logger.error(f"No message in LLM choice: {result}")
+            return None
+
+        return message.get("content") if isinstance(message, dict) else message
     except requests.RequestException as e:
         logger.error(f"Failed to call LLM: {e}")
+        return None
+    except (KeyError, IndexError, TypeError) as e:
+        logger.error(f"Failed to parse LLM response: {e}")
         return None
 
 
@@ -127,7 +168,11 @@ def get_qdrant_client():
     """Get Qdrant client."""
     try:
         from qdrant_client import QdrantClient
-        return QdrantClient(host=Config.QDRANT_HOST, port=Config.QDRANT_PORT)
+        return QdrantClient(
+            host=Config.QDRANT_HOST,
+            port=Config.QDRANT_PORT,
+            check_compatibility=False  # Suppress version warning
+        )
     except ImportError:
         logger.error("qdrant-client not installed")
         return None
@@ -228,20 +273,41 @@ def search_collection(
         if not query_embedding:
             return []
 
-        results = client.search(
+        # Use scroll to get all points, then calculate similarity manually
+        # This is a workaround for Qdrant 1.7.x client compatibility
+        # scroll returns (records, next_page_offset) tuple
+        all_points, _ = client.scroll(
             collection_name=collection_name,
-            query_vector=query_embedding[0],
-            limit=limit
+            limit=100,  # Get more points for filtering
+            with_vectors=True
         )
-        return [
-            {
-                "id": r.id,
-                "score": r.score,
-                "text": r.payload.get("text", ""),
-                "metadata": r.payload
-            }
-            for r in results
-        ]
+
+        if not all_points:
+            return []
+
+        # Calculate cosine similarity manually
+        import numpy as np
+        query_vec = np.array(query_embedding[0])
+        query_vec = query_vec / np.linalg.norm(query_vec)
+
+        results_with_scores = []
+        for point in all_points:
+            if point.vector is None:
+                continue
+            vec = np.array(point.vector)
+            vec = vec / np.linalg.norm(vec)
+            score = float(np.dot(query_vec, vec))
+            results_with_scores.append({
+                "id": str(point.id),
+                "score": score,
+                "text": point.payload.get("text", ""),
+                "metadata": point.payload
+            })
+
+        # Sort by score and limit
+        results_with_scores.sort(key=lambda x: x["score"], reverse=True)
+        return results_with_scores[:limit]
+
     except Exception as e:
         logger.error(f"Failed to search collection: {e}")
         return []
@@ -249,12 +315,31 @@ def search_collection(
 
 # ============ Embedding API ============
 
+# Global model cache
+_embedding_model = None
+
+
+def _get_embedding_model():
+    """Get or create cached embedding model."""
+    global _embedding_model
+    if _embedding_model is None:
+        from sentence_transformers import SentenceTransformer
+        # Use HF cache directory - set via HF_HOME env var
+        # Default cache is ~/.cache/huggingface which is mounted to volume
+        model_name = "BAAI/bge-m3"
+        logger.info(f"Loading embedding model: {model_name}")
+        _embedding_model = SentenceTransformer(model_name)
+        logger.info(f"Embedding model loaded successfully")
+    return _embedding_model
+
 
 def get_embeddings(texts: list) -> list:
     """Get embeddings for texts using BAAI/bge-m3."""
+    if not texts:
+        return []
+
     try:
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer("BAAI/bge-m3")
+        model = _get_embedding_model()
         embeddings = model.encode(texts, normalize_embeddings=True)
         return embeddings.tolist()
     except ImportError:
@@ -263,3 +348,119 @@ def get_embeddings(texts: list) -> list:
     except Exception as e:
         logger.error(f"Failed to get embeddings: {e}")
         return []
+
+
+# ============ Qdrant Point Operations ============
+
+
+def list_points(collection_name: str) -> list:
+    """List all points in a collection."""
+    client = get_qdrant_client()
+    if not client:
+        return []
+
+    try:
+        # Use scroll to get all points
+        scroll_result = client.scroll(
+            collection_name=collection_name,
+            limit=100,
+            with_payload=True,
+            with_vectors=False,
+        )
+
+        # Handle different return types from qdrant-client
+        if isinstance(scroll_result, tuple):
+            results = scroll_result[0] if scroll_result[0] is not None else []
+        elif isinstance(scroll_result, list):
+            results = scroll_result
+        else:
+            results = []
+
+        if not results:
+            return []
+
+        return [
+            {
+                "id": point.id,
+                "filename": point.payload.get("filename", ""),
+                "payload": point.payload.get("text", ""),
+            }
+            for point in results
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list points: {e}")
+        return []
+
+
+def get_point(collection_name: str, point_id: str) -> Optional[dict]:
+    """Get a single point by ID."""
+    client = get_qdrant_client()
+    if not client:
+        return None
+
+    try:
+        results = client.retrieve(
+            collection_name=collection_name,
+            ids=[point_id],
+            with_payload=True,
+            with_vectors=False,
+        )
+        if not results:
+            return None
+
+        point = results[0]
+        return {
+            "id": point.id,
+            "filename": point.payload.get("filename", ""),
+            "payload": point.payload.get("text", ""),
+        }
+    except Exception as e:
+        logger.error(f"Failed to get point: {e}")
+        return None
+
+
+def delete_point(collection_name: str, point_id: str) -> bool:
+    """Delete a single point by ID."""
+    client = get_qdrant_client()
+    if not client:
+        return False
+
+    try:
+        from qdrant_client.models import PointIdsList
+        client.delete(
+            collection_name=collection_name,
+            points_selector=PointIdsList(points=[point_id]),
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to delete point: {e}")
+        return False
+
+
+def delete_all_points(collection_name: str) -> bool:
+    """Delete all points from a collection."""
+    client = get_qdrant_client()
+    if not client:
+        return False
+
+    try:
+        from qdrant_client.models import PointIdsList
+        # Get all point IDs first
+        scroll_result = client.scroll(
+            collection_name=collection_name,
+            limit=10000,
+            with_payload=False,
+            with_vectors=False,
+        )
+        all_points = scroll_result[0] if scroll_result else []
+        point_ids = [point.id for point in all_points]
+
+        if point_ids:
+            client.delete(
+                collection_name=collection_name,
+                points_selector=PointIdsList(points=point_ids),
+            )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to delete all points: {e}")
+        return False
