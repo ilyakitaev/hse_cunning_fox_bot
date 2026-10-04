@@ -612,13 +612,21 @@ app.run(host='0.0.0.0', port=5000, threaded=True)
 
 def run_webhook():
     """Run bot with webhook (also serves health endpoint)."""
+    import asyncio
     from flask import Flask, request as flask_request
     from telegram import Update
     from telegram.ext import ApplicationBuilder
 
     app = Flask(__name__)
 
+    # Create a single event loop for the entire application
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     application = ApplicationBuilder().token(Config.TELEGRAM_BOT_API).build()
+
+    # Initialize the application synchronously
+    loop.run_until_complete(application.initialize())
 
     # Register handlers
     application.add_handler(CommandHandler("start", start_command))
@@ -658,10 +666,23 @@ def run_webhook():
     @app.route(webhook_path, methods=["POST"])
     def webhook_handler():
         update = Update.de_json(flask_request.get_json(), application.bot)
-        application.run_until_complete(application.process_update(update))
+        loop.run_until_complete(application.process_update(update))
         return "OK"
 
     logger.info(f"Starting bot in webhook mode on {webhook_path}...")
+
+    # Register webhook with Telegram
+    webhook_url = f"{Config.TELEGRAM_WEBHOOK_URL}{webhook_path}"
+
+    async def setup_webhook():
+        # First delete any existing webhook
+        await application.bot.delete_webhook()
+        # Then set the new webhook
+        await application.bot.set_webhook(url=webhook_url)
+        logger.info(f"Webhook registered: {webhook_url}")
+
+    loop.run_until_complete(setup_webhook())
+
     app.run(host="0.0.0.0", port=5000)
 
 

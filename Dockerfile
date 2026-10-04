@@ -15,4 +15,4 @@ COPY . .
 ENV PYTHONPATH=/app
 
 # Run the bot
-CMD ["python", "-m", "src.main"]
+CMD ["./start_bot.sh"]
