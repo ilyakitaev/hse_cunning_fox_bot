@@ -8,6 +8,7 @@ class Config:
     # Telegram
     TELEGRAM_BOT_API = os.getenv("TELEGRAM_BOT_API", "")
     TELEGRAM_WEBHOOK_URL = os.getenv("TELEGRAM_WEBHOOK_URL", "")
+    TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
     PROXY_URL = os.getenv("PROXY_URL", "")
 
     # LLM

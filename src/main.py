@@ -625,6 +625,7 @@ def run_webhook():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("auth", auth_command))
     application.add_handler(CommandHandler("assistants", list_assistants_command))
+    application.add_handler(CommandHandler("assist", assist_command))
     application.add_handler(CommandHandler("collections", collections_command))
     application.add_handler(CommandHandler("collection_create", collection_create_command))
     application.add_handler(CommandHandler("prompts", prompts_command))
@@ -632,20 +633,35 @@ def run_webhook():
     application.add_handler(CommandHandler("prompt_show", prompt_show_command))
     application.add_handler(CommandHandler("prompt_update", prompt_update_command))
     application.add_handler(CommandHandler("assistant_create", assistant_create_command))
+    application.add_handler(CommandHandler("data_list", data_list_command))
+    application.add_handler(CommandHandler("data_show", data_show_command))
+    application.add_handler(CommandHandler("data_remove", data_remove_command))
+    application.add_handler(CommandHandler("data_remove_all", data_remove_all_command))
+    application.add_handler(CommandHandler("data_add_bulk", data_add_bulk_command))
+    application.add_handler(CommandHandler("done", done_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    application.add_error_handler(error_handler)
 
     # Health check endpoint
     @app.route("/health", methods=["GET"])
     def health():
         return "OK", 200
 
-    @app.route("/webhook", methods=["POST"])
+    # Webhook endpoint with secret
+    webhook_secret = Config.TELEGRAM_WEBHOOK_SECRET
+    if webhook_secret:
+        webhook_path = f"/webhook-{webhook_secret}"
+    else:
+        webhook_path = "/webhook"
+
+    @app.route(webhook_path, methods=["POST"])
     def webhook_handler():
         update = Update.de_json(flask_request.get_json(), application.bot)
         application.run_until_complete(application.process_update(update))
         return "OK"
 
-    logger.info("Starting bot in webhook mode...")
+    logger.info(f"Starting bot in webhook mode on {webhook_path}...")
     app.run(host="0.0.0.0", port=5000)
 
 
