@@ -171,7 +171,6 @@ def get_qdrant_client():
         return QdrantClient(
             host=Config.QDRANT_HOST,
             port=Config.QDRANT_PORT,
-            check_compatibility=False  # Suppress version warning
         )
     except ImportError:
         logger.error("qdrant-client not installed")
@@ -263,7 +262,7 @@ def search_collection(
     query: str,
     limit: int = 5
 ) -> list:
-    """Search a Qdrant collection."""
+    """Search a Qdrant collection using native similarity search."""
     client = get_qdrant_client()
     if not client:
         return []
@@ -273,40 +272,26 @@ def search_collection(
         if not query_embedding:
             return []
 
-        # Use scroll to get all points, then calculate similarity manually
-        # This is a workaround for Qdrant 1.7.x client compatibility
-        # scroll returns (records, next_page_offset) tuple
-        all_points, _ = client.scroll(
+        # Use Qdrant's native search for server-side similarity computation
+        results = client.search(
             collection_name=collection_name,
-            limit=100,  # Get more points for filtering
-            with_vectors=True
+            query_vector=query_embedding[0],
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
         )
 
-        if not all_points:
-            return []
+        logger.debug(f"Retrieved {len(results)} documents from collection '{collection_name}'")
 
-        # Calculate cosine similarity manually
-        import numpy as np
-        query_vec = np.array(query_embedding[0])
-        query_vec = query_vec / np.linalg.norm(query_vec)
-
-        results_with_scores = []
-        for point in all_points:
-            if point.vector is None:
-                continue
-            vec = np.array(point.vector)
-            vec = vec / np.linalg.norm(vec)
-            score = float(np.dot(query_vec, vec))
-            results_with_scores.append({
+        return [
+            {
                 "id": str(point.id),
-                "score": score,
+                "score": point.score,
                 "text": point.payload.get("text", ""),
                 "metadata": point.payload
-            })
-
-        # Sort by score and limit
-        results_with_scores.sort(key=lambda x: x["score"], reverse=True)
-        return results_with_scores[:limit]
+            }
+            for point in results
+        ]
 
     except Exception as e:
         logger.error(f"Failed to search collection: {e}")

@@ -1,4 +1,6 @@
 python-telegram-bot>=20.0
+qdrant-client>=1.6.0,<1.7.0
+sentence-transformers>=2.2.0
 requests>=2.31.0
 flask>=3.0.0
 sqlalchemy>=2.0.0

@@ -2,16 +2,10 @@ FROM hse_cunning_fox_bot_base:latest
 
 WORKDIR /app
 
-# Copy requirements
-COPY requirements.txt .
-
-# Install application dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Install test dependencies
+# Install test dependencies only
 RUN pip install --no-cache-dir pytest pytest-asyncio
 
-# Copy application code
+# Copy application code (packages already in base image)
 COPY . .
 
 # Set Python path

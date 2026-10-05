@@ -4,6 +4,8 @@
 - every business logic and api function should be covered with unit test with mocks
 - do not open ports in compose.yaml, if they are opened -- remove "ports"
 - before update tests code, update tests.md then implement
+- Base docker image should have only qdrant-client and sentence-transformers libraries
+- Docker images should not use pipenv inside. Pipenv only for local development and unit tests.
 
 ## Core Development Rules
 

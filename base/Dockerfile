@@ -11,12 +11,15 @@ WORKDIR /app
 
 # Copy requirements
 COPY requirements.txt .
+COPY Pipfile* .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir pipenv && \
+    pipenv install --system --deploy --ignore-pipfile
 
 # Pre-cache the embedding model
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')"
+RUN pip install --no-cache-dir numpy scipy scikit-learn httpcore httpx && \
+    python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')"
 
 # Set Python path
 ENV PYTHONPATH=/app
