@@ -6,6 +6,8 @@
 - before update tests code, update tests.md then implement
 - Base docker image should have only qdrant-client and sentence-transformers libraries
 - Docker images should not use pipenv inside. Pipenv only for local development and unit tests.
+- Integration test should mock only telegram api, embeddings and llm calls. All interaction with databases should be real with services in docker compose.
+- Never skip tests
 
 ## Core Development Rules
 

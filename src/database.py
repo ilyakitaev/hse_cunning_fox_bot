@@ -10,6 +10,7 @@ from sqlalchemy import (
     Text,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship, joinedload
@@ -75,6 +76,7 @@ class Assistant(Base):
     name = Column(String(255), nullable=False)
     system_prompt_id = Column(Integer, ForeignKey("system_prompts.id"), nullable=False)
     collection_id = Column(Integer, ForeignKey("collections.id"), nullable=False)
+    score_threshold = Column(Float, default=0.6, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     system_prompt = relationship("SystemPrompt", back_populates="assistants")
@@ -242,7 +244,12 @@ def get_assistant_by_id(assistant_id: int) -> Optional[Assistant]:
         session.close()
 
 
-def create_assistant(name: str, collection_id: int, system_prompt_id: int) -> Assistant:
+def create_assistant(
+    name: str,
+    collection_id: int,
+    system_prompt_id: int,
+    score_threshold: float = 0.6
+) -> Assistant:
     """Create a new assistant."""
     session = get_session()
     try:
@@ -250,6 +257,7 @@ def create_assistant(name: str, collection_id: int, system_prompt_id: int) -> As
             name=name,
             collection_id=collection_id,
             system_prompt_id=system_prompt_id,
+            score_threshold=score_threshold,
         )
         session.add(assistant)
         session.commit()

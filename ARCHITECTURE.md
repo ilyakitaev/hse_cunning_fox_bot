@@ -101,6 +101,7 @@ Assistant:
 - name: string 255
 - SystemPrompt.id
 - collection.id
+- score_threshold (default 0.6)
 
 Collections:
 - id: pk

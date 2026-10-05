@@ -171,6 +171,7 @@ def get_qdrant_client():
         return QdrantClient(
             host=Config.QDRANT_HOST,
             port=Config.QDRANT_PORT,
+            timeout=30,
         )
     except ImportError:
         logger.error("qdrant-client not installed")
@@ -260,7 +261,8 @@ def add_to_collection(
 def search_collection(
     collection_name: str,
     query: str,
-    limit: int = 5
+    limit: int = 5,
+    score_threshold: float = 0.0
 ) -> list:
     """Search a Qdrant collection using native similarity search."""
     client = get_qdrant_client()
@@ -277,11 +279,14 @@ def search_collection(
             collection_name=collection_name,
             query_vector=query_embedding[0],
             limit=limit,
+            score_threshold=score_threshold,
             with_payload=True,
             with_vectors=False,
         )
 
-        logger.debug(f"Retrieved {len(results)} documents from collection '{collection_name}'")
+        logger.debug(f"Return {len(results)} documents from collection '{collection_name}'")
+        for point in results:
+            logger.debug(f"Document id={point.id}, score={point.score}")
 
         return [
             {

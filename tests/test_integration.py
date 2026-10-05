@@ -55,6 +55,27 @@ TEST_CHAT_ID = 123456789
 TEST_USER_ID = 123456789
 
 
+# ============ Mock Helpers ============
+
+
+def create_mock_embeddings():
+    """Create mock embeddings function that returns random vectors."""
+    import numpy as np
+
+    def mock_get_embeddings(texts):
+        return [np.random.rand(1024).tolist() for _ in texts]
+
+    return mock_get_embeddings
+
+
+def create_mock_llm(response: str = "Test response"):
+    """Create mock LLM function that returns fixed response."""
+    def mock_call_llm(system_prompt: str, user_prompt: str) -> str:
+        return response
+
+    return mock_call_llm
+
+
 class TestIntegrationSetup:
     """Test database initialization."""
 
@@ -127,7 +148,6 @@ class TestAuthorizedCommands:
         # Should return some message about collections
         assert result is not None
 
-    @pytest.mark.skip(reason="Qdrant storage has issues - infrastructure issue")
     def test_cmd_collection_create(self, monkeypatch):
         """Test /collection_create."""
         calls = []
@@ -137,6 +157,11 @@ class TestAuthorizedCommands:
         import time
         test_collection_name = f"test_collection_{TEST_USER_ID}_{int(time.time())}"
 
+        # Clean up if exists
+        from src.api import delete_collection
+        delete_collection(test_collection_name)
+
+        # Let command create the Qdrant collection itself
         result = cmd_database_create(chat_id=TEST_CHAT_ID, name=test_collection_name)
         assert "created" in result.lower() or "success" in result.lower()
 
@@ -280,15 +305,10 @@ class TestQdrantIntegration:
         collections = list_qdrant_collections()
         assert isinstance(collections, list)
 
-    @pytest.mark.skip(reason="Qdrant storage has issues - infrastructure issue")
     def test_create_collection(self):
         """Test creating a Qdrant collection."""
         import time
         test_name = f"integration_test_{TEST_USER_ID}_{int(time.time())}"
-
-        # Clean up if exists
-        from src.api import delete_collection
-        delete_collection(test_name)
 
         result = create_qdrant_collection(test_name)
         assert result is True
@@ -396,12 +416,6 @@ class TestDataCommandsIntegration:
         calls = []
         monkeypatch.setattr("src.business_logic.send_telegram_message", lambda chat_id, text: calls.append((chat_id, text)))
 
-        # Mock embeddings to avoid downloading model
-        import numpy as np
-        def mock_get_embeddings(texts):
-            return [np.random.rand(1024).tolist() for _ in texts]
-        monkeypatch.setattr("src.api.get_embeddings", mock_get_embeddings)
-
         # Create a test collection with data
         import time
         test_collection = f"test_data_{TEST_USER_ID}_{int(time.time())}"
@@ -418,12 +432,6 @@ class TestDataCommandsIntegration:
         """Test /data_show."""
         calls = []
         monkeypatch.setattr("src.business_logic.send_telegram_message", lambda chat_id, text: calls.append((chat_id, text)))
-
-        # Mock embeddings to avoid downloading model
-        import numpy as np
-        def mock_get_embeddings(texts):
-            return [np.random.rand(1024).tolist() for _ in texts]
-        monkeypatch.setattr("src.api.get_embeddings", mock_get_embeddings)
 
         # Create collection and add data
         import time
@@ -446,12 +454,6 @@ class TestDataCommandsIntegration:
         calls = []
         monkeypatch.setattr("src.business_logic.send_telegram_message", lambda chat_id, text: calls.append((chat_id, text)))
 
-        # Mock embeddings to avoid downloading model
-        import numpy as np
-        def mock_get_embeddings(texts):
-            return [np.random.rand(1024).tolist() for _ in texts]
-        monkeypatch.setattr("src.api.get_embeddings", mock_get_embeddings)
-
         # Create collection and add data
         import time
         test_collection = f"test_data_remove_{TEST_USER_ID}_{int(time.time())}"
@@ -473,12 +475,6 @@ class TestDataCommandsIntegration:
         calls = []
         monkeypatch.setattr("src.business_logic.send_telegram_message", lambda chat_id, text: calls.append((chat_id, text)))
 
-        # Mock embeddings to avoid downloading model
-        import numpy as np
-        def mock_get_embeddings(texts):
-            return [np.random.rand(1024).tolist() for _ in texts]
-        monkeypatch.setattr("src.api.get_embeddings", mock_get_embeddings)
-
         # Create collection and add data
         import time
         test_collection = f"test_data_remove_all_{TEST_USER_ID}_{int(time.time())}"
@@ -490,14 +486,15 @@ class TestDataCommandsIntegration:
         result = cmd_data_remove_all(chat_id=TEST_CHAT_ID, collection_name=test_collection)
         assert result is not None
 
-    @pytest.mark.skip(reason="Qdrant connection timeout issues")
     def test_cmd_data_add_bulk_start(self, monkeypatch):
         """Test /data_add_bulk starts bulk mode."""
         calls = []
         monkeypatch.setattr("src.business_logic.send_telegram_message", lambda chat_id, text: calls.append((chat_id, text)))
 
-        # Use hardcoded collection that exists
-        test_collection = "test1"
+        # Create collection first
+        import time
+        test_collection = f"test_bulk_{TEST_USER_ID}_{int(time.time())}"
+        create_qdrant_collection(test_collection)
 
         result = cmd_data_add_bulk_start(chat_id=TEST_CHAT_ID, user_id=TEST_USER_ID, collection_name=test_collection)
         assert "bulk upload" in result.lower() or "sending" in result.lower()
@@ -552,20 +549,15 @@ class TestDataCommandsIntegration:
         result = cmd_data_remove(chat_id=TEST_CHAT_ID, collection_name=test_collection, point_id="nonexistent-uuid")
         assert "not found" in result.lower()
 
-    @pytest.mark.skip(reason="Qdrant connection timeout issues")
     def test_cmd_data_bulk_with_content(self, monkeypatch):
         """Test /done with actual content added."""
         calls = []
         monkeypatch.setattr("src.business_logic.send_telegram_message", lambda chat_id, text: calls.append((chat_id, text)))
 
-        # Mock embeddings to avoid downloading model
-        import numpy as np
-        def mock_get_embeddings(texts):
-            return [np.random.rand(1024).tolist() for _ in texts]
-        monkeypatch.setattr("src.api.get_embeddings", mock_get_embeddings)
-
-        # Use hardcoded collection that exists
-        test_collection = "test1"
+        # Create collection first
+        import time
+        test_collection = f"test_bulk_content_{TEST_USER_ID}_{int(time.time())}"
+        create_qdrant_collection(test_collection)
 
         # Start bulk upload
         result_start = cmd_data_add_bulk_start(chat_id=TEST_CHAT_ID, user_id=TEST_USER_ID, collection_name=test_collection)
@@ -589,11 +581,7 @@ class TestAssistantFlow:
         calls = []
         monkeypatch.setattr("src.business_logic.send_telegram_message", lambda chat_id, text: calls.append((chat_id, text)))
 
-        # Mock embeddings and LLM
-        import numpy as np
-        def mock_get_embeddings(texts):
-            return [np.random.rand(1024).tolist() for _ in texts]
-        monkeypatch.setattr("src.api.get_embeddings", mock_get_embeddings)
+        # Mock LLM (external API), but use real embeddings
         monkeypatch.setattr("src.business_logic.call_llm", lambda system, user: "Test response")
 
         # Clear states
@@ -625,3 +613,78 @@ class TestAssistantFlow:
 
         # Clear
         _selected_assistant_state.clear()
+
+
+class TestAssistantQueryFlow:
+    """Integration tests for full assistant query flow with real Qdrant."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """Setup and teardown for each test."""
+        # Authorize user
+        authorize_user(TEST_USER_ID)
+        # Clear states
+        _selected_assistant_state.clear()
+        yield
+        # Cleanup
+        _selected_assistant_state.clear()
+
+    def test_query_with_qdrant_search(self, monkeypatch):
+        """Test assistant query uses real Qdrant search."""
+        import time
+
+        calls = []
+        monkeypatch.setattr(
+            "src.business_logic.send_telegram_message",
+            lambda chat_id, text: calls.append((chat_id, text))
+        )
+        monkeypatch.setattr("src.api.get_embeddings", create_mock_embeddings())
+        monkeypatch.setattr("src.business_logic.call_llm", create_mock_llm("Qdrant found relevant data"))
+
+        # Create Qdrant collection with test data
+        test_collection = f"qdrant_flow_{TEST_USER_ID}_{int(time.time())}"
+        create_qdrant_collection(test_collection)
+
+        # Add data to Qdrant collection
+        from src.api import add_to_collection
+        test_texts = [
+            "Python is a high-level programming language",
+            "JavaScript is used for web development",
+            "Rust is a systems programming language",
+        ]
+        test_payloads = [{"filename": f"file{i}.txt"} for i in range(len(test_texts))]
+        add_to_collection(test_collection, test_texts, test_payloads)
+
+        # Create prompt in database
+        prompt = create_prompt(
+            name=f"qdrant_prompt_{TEST_USER_ID}",
+            prompt_data="You are a helpful assistant. Use the provided context to answer.",
+            author_username="test"
+        )
+
+        # Create DB collection
+        db_collection = get_collection_by_name(test_collection)
+        if not db_collection:
+            db_collection = create_db_collection(test_collection)
+
+        # Create assistant
+        assistant = create_db_assistant(f"QdrantBot_{TEST_USER_ID}", db_collection.id, prompt.id)
+
+        # Select assistant
+        cmd_assist(chat_id=TEST_CHAT_ID, user_id=TEST_USER_ID, assistant_name=f"QdrantBot_{TEST_USER_ID}")
+
+        # Query with question that should trigger Qdrant search
+        result = query_assistant(
+            chat_id=TEST_CHAT_ID,
+            user_id=TEST_USER_ID,
+            assistant_id=str(assistant.id),
+            user_message="What is Python?"
+        )
+
+        # Verify query succeeded
+        assert result is not None
+        assert "Qdrant found relevant data" in result
+
+        # Cleanup Qdrant collection
+        from src.api import delete_collection
+        delete_collection(test_collection)

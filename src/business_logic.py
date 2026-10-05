@@ -38,6 +38,7 @@ from src.database import (
     init_db,
     Assistant,
 )
+from src.migrations import run_migrations
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ def get_authorized_users() -> list:
 def init_database() -> None:
     """Initialize the database."""
     init_db()
+    run_migrations()
 
 
 # ============ Public Commands ============
@@ -466,7 +468,10 @@ def query_assistant(chat_id: int, user_id: int, assistant_id: str, user_message:
         return msg
 
     try:
-        retrieved_data = search_collection(collection_name, user_message, limit=5)
+        score_threshold = assistant.score_threshold or 0.0
+        retrieved_data = search_collection(
+            collection_name, user_message, limit=5, score_threshold=score_threshold
+        )
     except Exception as e:
         logger.error(f"Search collection failed: {e}")
         retrieved_data = []

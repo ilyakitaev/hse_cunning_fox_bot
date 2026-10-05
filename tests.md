@@ -1,5 +1,31 @@
 # Test Cases for Unit Tests
 
+## Integration Test Rules
+
+Per CLAUDE.md Rule #9: "Integration test should mock only telegram api, embeddings and llm calls. All interaction with databases should be real with services in docker compose."
+
+### Integration Test Patterns
+- **Mock**: 
+  - `send_telegram_message` - via `monkeypatch.setattr`
+  - `get_embeddings` - via `monkeypatch.setattr`
+  - `call_llm` - via `monkeypatch.setattr`
+- **Real**: PostgreSQL and Qdrant via docker compose
+- **Use fixtures** for test isolation and cleanup
+
+### Test Execution
+```bash
+docker compose -f compose.test.yaml run --rm test
+```
+
+### Full Flow Test
+The `TestAssistantQueryFlow` class tests end-to-end:
+1. Create Qdrant collection (real)
+2. Add test data with mocked embeddings (mock)
+3. Create prompt in database (real)
+4. Create assistant (real)
+5. Query assistant with mocked LLM (mock)
+6. Verify Qdrant search interaction (real)
+
 ## Test Business Logic
 
 ### Authentication (TestAuth)
